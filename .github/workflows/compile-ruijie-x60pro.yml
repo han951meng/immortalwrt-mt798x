@@ -1,4 +1,4 @@
-name: Compile Ruijie RG-X60 Pro Firmware
+name: Compile Ruijie RG-X60 Pro 24.10 Firmware
 
 on:
   workflow_dispatch:  # 手动触发编译
@@ -7,49 +7,59 @@ jobs:
   compile:
     runs-on: ubuntu-22.04
     steps:
-      - name: Checkout source code
+      - name: Checkout source code (24.10 分支)
         uses: actions/checkout@main
         with:
           repository: hanwckf/immortalwrt-mt798x
+          ref: openwrt-24.10  # 24.10 关键：指定拉取 24.10 分支
           fetch-depth: 0
 
-      - name: Update feeds
+      - name: Update feeds (适配 24.10)
         run: |
           ./scripts/feeds update -a
           ./scripts/feeds install -a
+          # 24.10 补充：确保 PassWall2 适配 24.10
+          ./scripts/feeds install luci-app-passwall2 luci-i18n-passwall2-zh-cn
 
-      - name: Configure firmware (RG-X60 Pro + PassWall2 + 中文)
+      - name: Configure firmware (24.10 + RG-X60 Pro + PassWall2)
         run: |
-          # 写入配置文件（适配 RG-X60 Pro）
+          # 写入 24.10 适配的配置文件
           cat > .config << EOF
           CONFIG_TARGET_mediatek=y
           CONFIG_TARGET_mediatek_filogic=y
           CONFIG_TARGET_mediatek_filogic_DEVICE_ruijie_rg-x60-pro=y
-          # 启用 LuCI 网页后台 + 中文
+          # 24.10 核心：启用 OpenWrt 24.10 基础配置
+          CONFIG_VERSION_NUMBER="24.10.0-RG-X60-Pro"
+          CONFIG_VERSION_DIST="ImmortalWrt"
+          # 启用 LuCI 网页后台（24.10 适配版）
           CONFIG_LUCI=y
           CONFIG_LUCI_LANG_zh_CN=y
           CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
-          # 启用 PassWall2 + 中文
+          CONFIG_PACKAGE_luci-theme-bootstrap=y  # 24.10 默认主题
+          # 启用 PassWall2 + 中文（24.10 兼容版）
           CONFIG_PACKAGE_luci-app-passwall2=y
           CONFIG_PACKAGE_luci-i18n-passwall2-zh-cn=y
-          # 启用 Xray 核心（PassWall2 依赖）
+          # 24.10 适配：Xray 核心版本
           CONFIG_PACKAGE_xray-core=y
           # 关闭无用功能，减小固件体积
           CONFIG_BUILD_LOG=y
           CONFIG_CCACHE=y
+          CONFIG_DISABLE_MFI=y
+          CONFIG_DISABLE_MTD_ROOTFS=y
           EOF
-          # 加载配置并下载依赖
+          # 加载配置并下载 24.10 依赖
           make defconfig
           make download -j$(nproc)
-          find dl -size -1024c -exec ls -l {} \;
+          # 清理无效依赖文件
           find dl -size -1024c -exec rm -f {} \;
 
-      - name: Compile firmware
+      - name: Compile 24.10 firmware
         run: |
-          make -j$(nproc) V=s || make -j1 V=s  # 编译失败时单线程重试
+          # 24.10 编译优化：先多线程，失败则单线程
+          make -j$(nproc) V=s || make -j1 V=s
 
-      - name: Upload firmware
+      - name: Upload 24.10 firmware
         uses: actions/upload-artifact@main
         with:
-          name: Ruijie-RG-X60-Pro-Firmware
+          name: Ruijie-RG-X60-Pro-24.10-Firmware
           path: bin/targets/mediatek/filogic/
